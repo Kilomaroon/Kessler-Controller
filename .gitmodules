@@ -1,0 +1,3 @@
+[submodule "kessler-game"]
+	path = kessler-game
+	url = https://github.com/ThalesGroup/kessler-game.git
