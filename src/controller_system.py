@@ -18,7 +18,8 @@ MAX_THRUST = 10
 class MyController(KesslerController):
     def __init__(self):
         self.rules_values = []
-        self.make_tree()    
+        self.make_tree()
+        self.make_ranges()  
         self.set_parameters_from_chromosome()
         
     
@@ -67,9 +68,9 @@ class MyController(KesslerController):
         self.mine_confidence.add_antecedent(np.arange(0,MAX_MINES,1),'mines_remaining') #number of mines left
         self.mine_confidence.add_antecedent(np.arange(0,50,1),'enemies_ahead') # how many enemies in front of us (within a certain range)
 
-        self.risk.consequent = (BASIC_RANGE,self.risk.name)
-        self.agression.consequent = (BASIC_RANGE,self.agression.name)
-        self.mine_confidence.consequent = (BASIC_RANGE,self.priority.name)
+        self.risk.set_concequent(BASIC_RANGE,self.risk.name)
+        self.agression.set_concequent(BASIC_RANGE,self.agression.name)
+        self.mine_confidence.set_concequent(BASIC_RANGE,self.priority.name)
        
 
         # -------------- LAYER 1 INPUTS -----------------
@@ -83,9 +84,9 @@ class MyController(KesslerController):
         self.atk_turn.add_antecedent(np.arange(0,1.0,0.002),'bullet_time') # time it takes for a bullet to reach desired
         self.atk_turn.add_antecedent(np.arange(-1*math.pi/30,math.pi/30,0.1), 'theta_delta_atk') # angle between desired target and current direction
 
-        self.atk_turn.consequent = (BASIC_RANGE,self.atk_turn.name)
-        self.priority.consequent = (BASIC_RANGE,self.priority.name)
-        self.run_turn.consequent = (BASIC_RANGE,self.run_turn.name)
+        self.atk_turn.set_concequent(BASIC_RANGE,self.atk_turn.name)
+        self.priority.set_concequent(BASIC_RANGE,self.priority.name)
+        self.run_turn.set_concequent(BASIC_RANGE,self.run_turn.name)
 
         # ------------ OUTPUT LAYER -----------------------
 
@@ -98,11 +99,11 @@ class MyController(KesslerController):
         self.drop_mine.add_antecedent(BASIC_RANGE, self.mine_confidence.name)
         self.drop_mine.add_antecedent(BASIC_RANGE, self.priority.name)
 
-        self.thrust.consequent = (np.arange(0,MAX_THRUST,0.01),self.thrust.name)
-        self.fire.consequent = (BASIC_RANGE,self.fire.name)
-        self.drop_mine.add_antecedent = (BASIC_RANGE, self.drop_mine.name)
+        self.thrust.set_concequent(np.arange(0,MAX_THRUST,0.01),self.thrust.name)
+        self.fire.set_concequent(BASIC_RANGE,self.fire.name)
+        self.drop_mine.set_concequent(BASIC_RANGE, self.drop_mine.name)
 
-    def makerules(self):
+    def make_ranges(self):
         # -------------- LAYER 0 ----------------
         # nearby_asteroids
         (self.risk.antecedents[0])['none'] = fuzz.trimf(self.risk.antecedents[0].universe, [0,self.rules_values[0],self.rules_values[1]])
@@ -120,8 +121,31 @@ class MyController(KesslerController):
         (self.agression.antecedents[0])['PL'] = fuzz.trimf(self.agression.antecedents[0], [self.rules_values[20],self.rules_values[21],self.rules_values[22]])
         (self.agression.antecedents[0])['PM'] = fuzz.trimf(self.agression.antecedents[0], [self.rules_values[23],self.rules_values[24],self.rules_values[25]])
         (self.agression.antecedents[0])['PS'] = fuzz.trimf(self.agression.antecedents[0], [self.rules_values[26],self.rules_values[27],self.rules_values[28]])
+       
+       # mines_remaining
 
+
+       # current_speed
+
+
+       # mines_remaining
+
+
+        # enemies_ahead
+       
+        # -------------- LAYER 1  -----------------
         
+        # 
+
+
+        # TODO: Add the rest of the splits
+
+        for node in FIS.Nodes:
+            if node.antecedents:
+                node.control = ctrl.ControlSystem(node.rules)
+                node.sim = ctrl.ControlSystemSimulation(node.control)
+                    
+
 
 
 
@@ -143,8 +167,8 @@ class FIS:
     def add_antecedent(self, range, name):
         self.antecedents.append(ctrl.Antecedent(range,name))
 
-    def set_concequent(self, c):
-        self.consequent = ctrl.Consequent(c[0], c[1])
+    def set_concequent(self,c):
+        self.consequent = ctrl.Consequent(self.c[0], self.c[1])
 
     def build_tree():
         for node in FIS.Nodes:
