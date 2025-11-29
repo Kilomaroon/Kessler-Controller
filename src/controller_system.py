@@ -43,13 +43,12 @@ class MyController(KesslerController):
         mine_risk = FIS('mine_risk') # risk for mine to hit us
         asteroid_agression = FIS('asteroid_agression') # how badly we want to target asteroids
         opponent_agression = FIS('opponent_agression') # how badly we want to target other player
-        bullet_confidence = FIS('bullet_confidence') # expectation for bullet to hit target
+        turn = FIS('turn') # how necessary we think turning is and in what direction
 
         # Layer 1
         mine_confidence = FIS('mine_confidence') # expectation for mine to hit target
         priority = FIS('priority') # if our priority should be evasion or attack
-        threat = FIS('threat') # how scared we are of death
-        turn = FIS('turn') # how necessary we think turning is and in what direction
+        
 
         # Output layer
         thrust = FIS('thrust')
@@ -58,7 +57,6 @@ class MyController(KesslerController):
         drop_mine = FIS('drop_mine')
 
         # -------------- LAYER 0 INPUTS ----------------
-        mine_risk.add_antecedent(np.arange(0,MAX_LIVES,1),'lives_remaining') # how many lives do we have left
         mine_risk.add_antecedent(np.arange(0,MAX_ASTEROIDS,1),'nearby_asteroids') # asteroids near us within some radius r
         mine_risk.add_antecedent(np.arange(0,MAX_SPEED,0.01),'speed') # how fast we are currently going
         mine_risk.add_antecedent(np.arange(0,0,0.1,'mine_fired')) # have we fired a mine lately
@@ -70,18 +68,23 @@ class MyController(KesslerController):
         opponent_agression.add_antecedent(np.arange(0,MAX_DISTANCE,0.01),'player_distance') # how far away the other player is
         opponent_agression.add_antecedent(np.arange(0,MAX_LIVES,1),'opponent_lives') # not sure if you can pull this val. nix it if not ig
         opponent_agression.add_antecedent(np.arange(0,MAX_MINES,1),'mines_remaining') # how many mines we have left
-
-        bullet_confidence.add_antecedent(np.arange(0,1.0,0.001),'bullet_error') # some value you contrive to refer to error of the previous shots, feel free to change the range
-        bullet_confidence.add_antecedent(np.arange(0,MAX_DISTANCE,0.01),'nearest_asteroid') # distance to the nearest asteroid
-        bullet_confidence.add_antecedent(np.arange(0,100,0.1),'accurancy') # current accuracy score
+        
+        turn.add_antecedent(np.arange(),)
 
         mine_risk.consequent = (BASIC_RANGE,mine_risk.name)
         asteroid_agression.consequent = (BASIC_RANGE,asteroid_agression.name)
         opponent_agression.consequent = (BASIC_RANGE,opponent_agression.name)
-        bullet_confidence.consequent = (BASIC_RANGE,bullet_confidence.name)
 
         # -------------- LAYER 1 INPUTS -----------------
-        mine_confidence.add_antecedent()
+        mine_confidence.add_antecedent(BASIC_RANGE,'mine_risk')
+        mine_confidence.add_antecedent(BASIC_RANGE,'nearest_asteroid')
+
+        priority.add_antecedent(BASIC_RANGE,'opponent_agression')
+        priority.add_antecedent(BASIC_RANGE,'asteroid_agression')
+
+
+
+
         
 
         
