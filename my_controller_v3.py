@@ -8,8 +8,9 @@ import numpy as np
 class MyController(KesslerController):
     def __init__(self):
         super().__init__()
-        self.eval_frames = 0    # counter to track how many frames the controller has processed
-        
+        self.eval_frames = 0             # counter to track how many frames the controller has processed
+        self.last_mine_time = -100       # to track last mine drop time
+
         self.build_targeting_system()    # aiming and shooting
         self.build_movement_system()     # thrust and positioning
         self.build_survival_system()     # emergency evasion
@@ -149,7 +150,7 @@ class MyController(KesslerController):
         edge_distance['near_edge'] = fuzz.trimf(edge_distance.universe, [50, 100, 180])
         edge_distance['safe_center'] = fuzz.smf(edge_distance.universe, 150, 500)
         
-        # Thrust command membership functions
+        # thrust (-ve = moving away, +ve = approaching))
         ship_thrust['full_reverse'] = fuzz.trimf(ship_thrust.universe, [-500, -500, -300])
         ship_thrust['reverse'] = fuzz.trimf(ship_thrust.universe, [-400, -200, 0])
         ship_thrust['stop'] = fuzz.trimf(ship_thrust.universe, [-100, 0, 100])
@@ -221,47 +222,56 @@ class MyController(KesslerController):
         """get thrust from movement fuzzy system"""
         try:
             # calculate threat metrics
-            threats = self.assess_threats(game_state["asteroids"], ship_state, game_state)
+            threats = self.assess_threats(game_state["asteroids"], ship_state)
             closest_threat = min(threats, key=lambda x: x['distance']) if threats else None
             
-            # calculate edge distance
+            # calculate distance to map boundary
             map_size = game_state["map_size"]
             ship_pos = ship_state["position"]
             edge_distances = [ship_pos[0], map_size[0]-ship_pos[0], ship_pos[1], map_size[1]-ship_pos[1]]
             min_edge_distance = min(edge_distances)
             
+            if not closest_threat or closest_threat['distance'] > 400:
+                return 0.0
+
             if closest_threat:
                 self.movement_sim.input['threat_distance'] = closest_threat['distance']
                 self.movement_sim.input['approach_speed'] = closest_threat['approach_speed']
             else:
-                self.movement_sim.input['threat_distance'] = 1000  # Safe distance
-                self.movement_sim.input['approach_speed'] = -500   # Moving away
+                self.movement_sim.input['threat_distance'] = 1000  # safe distance
+                self.movement_sim.input['approach_speed'] = -500   # moving away
             
             self.movement_sim.input['edge_distance'] = min_edge_distance
             self.movement_sim.compute()
-            return float(self.movement_sim.output['ship_thrust'])
+            return -float(self.movement_sim.output['ship_thrust'])
         except Exception:
             return 0.0
 
     def apply_survival_override(self, ship_state, game_state, thrust, fire, aim_error):
         """apply survival system overrides"""
         try:
-            # calculate threat level
-            threats = self.assess_threats(game_state["asteroids"], ship_state, game_state)
+            # threat score (0-1)
+            threats = self.assess_threats(game_state["asteroids"], ship_state)
             max_threat = max([t['threat_score'] for t in threats]) if threats else 0
+            
+            # health score (0-1)
             health = ship_state["lives_remaining"] / 3.0
             
+            # input: threat level, health status
+            # output: survival override (0-1)
             self.survival_sim.input['threat_level'] = max_threat
             self.survival_sim.input['health_status'] = health
             self.survival_sim.compute()
             survival_mode = self.survival_sim.output['survival_override']
             
+            # extreme danger
             if survival_mode > 0.8: 
                 thrust = -400.0
-                fire = fire and (aim_error < 0.1)
+                fire = fire and (aim_error < 0.1) # only shoot if very accurate
+            # moderate danger
             elif survival_mode > 0.5: 
-                thrust = -200.0
-                fire = fire and (aim_error < 0.15)
+                thrust = -300.0
+                fire = fire and (aim_error < 0.15) # reduce shooting
                 
             return thrust, fire
         except Exception:
@@ -270,8 +280,8 @@ class MyController(KesslerController):
     def should_drop_mine(self, ship_state, game_state):
         """determine if we should drop a mine"""
         try:
-            threats = self.assess_threats(game_state["asteroids"], ship_state, game_state)
-            close_threats = [t for t in threats if t['distance'] < 250 and t['approach_speed'] > 50]
+            threats = self.assess_threats(game_state["asteroids"], ship_state)
+            close_threats = [t for t in threats if t['distance'] < 200 and t['approach_speed'] > 100]
             
             # calculate edge distance
             map_size = game_state["map_size"]
@@ -279,28 +289,49 @@ class MyController(KesslerController):
             edge_distances = [ship_pos[0], map_size[0]-ship_pos[0], ship_pos[1], map_size[1]-ship_pos[1]]
             min_edge_distance = min(edge_distances)
             
-            return len(close_threats) >= 2 and min_edge_distance > 120
+            ship_vel = ship_state["velocity"]
+            ship_speed = math.sqrt(ship_vel[0]**2 + ship_vel[1]**2)
+
+            mine_conditions = (
+                len(close_threats) >= 2 and               # multiple threats
+                min_edge_distance > 150 and               # safe from edges  
+                ship_speed > 50 and                       # not stationary
+                not self.recent_mine_dropped()            # not too frequent
+            )
+
+            if mine_conditions:
+                self.last_mine_time = self.eval_frames
+                return True
+        
+            return False
         except Exception:
             return False
 
-    def assess_threats(self, asteroids, ship_state, game_state):
+    def recent_mine_dropped(self):
+        """Check if mine was dropped recently to prevent spamming"""
+        if not hasattr(self, 'last_mine_time'):
+            self.last_mine_time = -100  
+        return (self.eval_frames - self.last_mine_time) < 60  # about 2s
+
+    def assess_threats(self, asteroids, ship_state):
         """threat assessment for movement and survival systems"""
         ship_pos = ship_state["position"]
         ship_vel = ship_state["velocity"]
         threats = []
         
         for asteroid in asteroids:
-            distance = math.dist(ship_pos, asteroid['position'])
+            distance = math.dist(ship_pos, asteroid['position']) 
             
             # threat score based on distance
-            threat_score = 1.0 / (distance + 0.1)
+            threat_score = 1.0 / (distance + 0.01)
             threat_score = min(1.0, threat_score)
             
             # calculate approach speed 
-            to_asteroid = [asteroid['position'][0]-ship_pos[0], asteroid['position'][1]-ship_pos[1]]
-            distance_norm = math.sqrt(to_asteroid[0]**2 + to_asteroid[1]**2)
+            to_asteroid = [asteroid['position'][0]-ship_pos[0], asteroid['position'][1]-ship_pos[1]] # vector from ship to asteroid
+            distance_norm = math.sqrt(to_asteroid[0]**2 + to_asteroid[1]**2) # magnitude
             if distance_norm > 0:
                 relative_vel = [asteroid['velocity'][0]-ship_vel[0], asteroid['velocity'][1]-ship_vel[1]]
+                # the dot product giving the projection of relative velocity onto the ship-asteroid direction
                 approach_speed = (relative_vel[0]*to_asteroid[0] + relative_vel[1]*to_asteroid[1]) / distance_norm
             else:
                 approach_speed = 0
@@ -383,7 +414,7 @@ class MyController(KesslerController):
         if best_target is None:
             return None, None, float('inf')
         
-        intercept_pos, intercept_time = self.calculate_intercept(ship_pos, asteroid=best_target)
+        intercept_pos, intercept_time = self.calculate_intercept(ship_pos, best_target)
         return best_target, intercept_pos, intercept_time
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
@@ -399,7 +430,7 @@ class MyController(KesslerController):
         
         if not best_asteroid or intercept_time == float('inf'):
             thrust = self.get_movement_thrust(ship_state, game_state)
-            return (0.0, 0.0, False, False)
+            #return (0.0, 0.0, False, False)
         
         # calculate theta_delta
         dx = intercept_pos[0] - ship_pos[0]
@@ -421,15 +452,15 @@ class MyController(KesslerController):
             turn_rate = float(theta_delta * 180 / math.pi)
             fire = bool(abs(theta_delta) < 0.2 and intercept_time < 2.0)
         
-        # # movement
-        # thrust = self.get_movement_thrust(ship_state, game_state)
-        # # survival 
-        # thrust, fire = self.apply_survival_override(ship_state, game_state, thrust, fire, theta_delta)
-        # # mine
-        # drop_mine = self.should_drop_mine(ship_state, game_state)
+        # movement
+        thrust = self.get_movement_thrust(ship_state, game_state)
+        # survival 
+        thrust, fire = self.apply_survival_override(ship_state, game_state, thrust, fire, theta_delta)
+        # mine
+        drop_mine = self.should_drop_mine(ship_state, game_state)
 
-        thrust = 0.0
-        drop_mine = False
+        # thrust = 0.0
+        # drop_mine = False
         
         return (float(thrust), float(turn_rate), bool(fire), bool(drop_mine))
 
