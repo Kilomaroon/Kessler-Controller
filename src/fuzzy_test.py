@@ -7,9 +7,8 @@ import time
 
 from kesslergame import Scenario, KesslerGame, GraphicsType
 from scott_dick_controller import ScottDickController
-from controller_system import MyController
+from my_controller_v3 import MyController
 from graphics_both import GraphicsBoth
-from test_controller_fuzzy import FuzzyController
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
