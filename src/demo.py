@@ -58,7 +58,7 @@ def fitness(chromosome):
 
 
 if __name__ == "__main__":
-    connection = sqlite3.connect('database3.db')
+    connection = sqlite3.connect('database4.db')
     cursor = connection.cursor()
     cursor.execute("SELECT chromosome FROM data ORDER BY fitness DESC LIMIT 1;")
     records = cursor.fetchall()

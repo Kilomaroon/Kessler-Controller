@@ -3,7 +3,6 @@ import random
 import numpy as np
 import math
 import time
-from tqdm import tqdm
 from kesslergame import Scenario, KesslerGame, GraphicsType, TrainerEnvironment
 from scott_dick_controller import ScottDickController
 from test_controller_fuzzy import FuzzyController
@@ -77,8 +76,7 @@ if __name__ == "__main__":
     alg.target_fitness_type = 'max'
     alg.fitness_function_impl = fitness
     alg.chromosome_impl = chromosome_function
-    for i in tqdm(range(100), desc="Evolving", ncols=100):
-        alg.evolve(1)
+    alg.evolve()
 
     alg.graph.highest_value_chromosome()
     alg.graph.show()
