@@ -3,6 +3,7 @@ import random
 import numpy as np
 import math
 import time
+from tqdm import tqdm
 from kesslergame import Scenario, KesslerGame, GraphicsType, TrainerEnvironment
 from scott_dick_controller import ScottDickController
 from test_controller_fuzzy import FuzzyController
@@ -23,8 +24,8 @@ my_test_scenario = Scenario(name='Test Scenario',
 
 # Define Game Settings
 game_settings = {'perf_tracker': True,
-                'graphics_type': GraphicsType.Tkinter,
-                'realtime_multiplier': 1,
+                'graphics_type': GraphicsType.NoGraphics,
+                'realtime_multiplier': 0,
                 'graphics_obj': None,
                 'frequency': 30}
 
@@ -49,9 +50,10 @@ def fitness(chromosome):
     # print('Deaths: ' + str([team.deaths for team in score.teams]))
     # print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
     # score.teams[0].accuracy
-    print(score.teams[0].asteroids_hit*score.teams[0].accuracy)
+    print("asteroids hit: "+str(score.teams[0].asteroids_hit))
+    print("time alive: " + str(score.sim_time))
 
-    return score.teams[0].asteroids_hit*score.teams[0].accuracy
+    return score.teams[0].asteroids_hit + score.sim_time
 
 def chromosome_function():
     chromosome_data = np.sort([random.uniform(0, 3) for _ in range(6)]).tolist() # bullet_time
@@ -70,12 +72,13 @@ def chromosome_function():
 
 if __name__ == "__main__":
     alg = ga.GA()
-    alg.population_size = 50
-    alg.generation_goal = 1
+    alg.population_size = 100
+    alg.generation_goal = 100
     alg.target_fitness_type = 'max'
     alg.fitness_function_impl = fitness
     alg.chromosome_impl = chromosome_function
-    alg.evolve()
+    for i in tqdm(range(100), desc="Evolving", ncols=100):
+        alg.evolve(1)
 
     alg.graph.highest_value_chromosome()
     alg.graph.show()

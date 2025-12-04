@@ -66,7 +66,7 @@ if __name__ == "__main__":
     input_string_cleaned = re.sub(r'np\.float64\((.*?)\)', r'\1', records[0][0])
     output_list = ast.literal_eval(input_string_cleaned)
 
-    print(output_list)
+    # print(output_list)
     fitness(output_list)
 
     connection.close()
