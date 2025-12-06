@@ -221,31 +221,52 @@ class MyController(KesslerController):
     def get_movement_thrust(self, ship_state, game_state):
         """get thrust from movement fuzzy system"""
         try:
-            # calculate threat metrics
             threats = self.assess_threats(game_state["asteroids"], ship_state)
-            closest_threat = min(threats, key=lambda x: x['distance']) if threats else None
-            
-            # calculate distance to map boundary
             map_size = game_state["map_size"]
             ship_pos = ship_state["position"]
-            edge_distances = [ship_pos[0], map_size[0]-ship_pos[0], ship_pos[1], map_size[1]-ship_pos[1]]
-            min_edge_distance = min(edge_distances)
-            
-            if not closest_threat or closest_threat['distance'] > 400:
-                return 0.0
 
-            if closest_threat:
-                self.movement_sim.input['threat_distance'] = closest_threat['distance']
-                self.movement_sim.input['approach_speed'] = closest_threat['approach_speed']
+            edge_distances = [
+                ship_pos[0],
+                map_size[0] - ship_pos[0],
+                ship_pos[1],
+                map_size[1] - ship_pos[1],
+            ]
+            min_edge_distance = min(edge_distances)
+
+            if threats:
+                closest = min(threats, key=lambda t: t['distance'])
+                dist = closest['distance']
+                approach_speed = closest['approach_speed']
             else:
-                self.movement_sim.input['threat_distance'] = 1000  # safe distance
-                self.movement_sim.input['approach_speed'] = -500   # moving away
+                dist = 1000
+                approach_speed = -500
+
             
+            if dist < 120:    # adjust this for what distance is too close to the asteroids
+        
+                print(f"[ESCAPE] dist={dist:.1f} -> hard thrust")
+                return -200.0
+
+            
+            self.movement_sim.input['threat_distance'] = dist
+            self.movement_sim.input['approach_speed'] = approach_speed
             self.movement_sim.input['edge_distance'] = min_edge_distance
+
             self.movement_sim.compute()
-            return -float(self.movement_sim.output['ship_thrust'])
-        except Exception:
+            thrust = float(self.movement_sim.output['ship_thrust'])
+
+            
+            thrust *= 2.0
+
+            # print(f"[MOVE] dist={dist:.1f} speed={approach_speed:.1f} thrust={thrust:.1f}")
+            return thrust
+
+        except Exception as e:
+            # print("Movement error:", e)
             return 0.0
+
+
+
 
     def apply_survival_override(self, ship_state, game_state, thrust, fire, aim_error):
         """apply survival system overrides"""

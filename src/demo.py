@@ -3,12 +3,12 @@ import random
 import numpy as np
 import sqlite3
 import math
+import os
 import time
 import ast
 import re
 from kesslergame import Scenario, KesslerGame, GraphicsType, TrainerEnvironment
 from scott_dick_controller import ScottDickController
-from test_controller_fuzzy import FuzzyController
 from my_controller_v3 import MyController
 from graphics_both import GraphicsBoth
 
@@ -58,8 +58,18 @@ def fitness(chromosome):
 
 
 if __name__ == "__main__":
-    connection = sqlite3.connect('database4.db')
+    base_dir = os.path.dirname(os.path.abspath(__file__))   
+    db_path = os.path.join(base_dir, "database4.db")        
+
+    # print("Using DB at:", db_path)  # debug
+
+    connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
+
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    print("Tables in DB:", cursor.fetchall())
+
+
     cursor.execute("SELECT chromosome FROM data ORDER BY fitness DESC LIMIT 1;")
     records = cursor.fetchall()
     
