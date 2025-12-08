@@ -56,9 +56,9 @@ def fitness(chromosome):
     print("asteroids hit: "+str(score.teams[0].asteroids_hit))
     print("time alive:    " + str(score.sim_time))
     print("accuracy:      "+str(score.teams[0].accuracy))
-    print("fitness:       "+str((score.teams[0].asteroids_hit + score.sim_time)*score.teams[0].accuracy))
+    print("fitness:       "+str((score.teams[0].asteroids_hit+score.sim_time)*score.teams[0].accuracy))
 
-    return (score.teams[0].asteroids_hit + score.sim_time)*score.teams[0].accuracy
+    return (score.teams[0].asteroids_hit+score.sim_time)*score.teams[0].accuracy
 
 def chromosome_function():
     chromosome_data = np.sort([random.uniform(0, 3) for _ in range(6)]).tolist() # bullet_time
@@ -78,15 +78,15 @@ def chromosome_function():
 if __name__ == "__main__":
     
     batch = []
-    batchsize = 20
+    batchsize = 3
     base_dir = os.path.dirname(os.path.abspath(__file__)) 
 
     for i in range(batchsize):
         db_path = os.path.join(base_dir,'batches',f'd{i}.db') 
         alg = ga.GA()
         alg.database_name = db_path
-        alg.population_size = 25
-        alg.generation_goal = 6
+        alg.population_size = 150
+        alg.generation_goal = 200
         alg.target_fitness_type = 'max'
         alg.fitness_function_impl = fitness
         alg.chromosome_impl = chromosome_function

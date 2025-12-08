@@ -5,6 +5,7 @@ import sqlite3
 import math
 import os
 import time
+from multiprocessing import Process
 import ast
 import matplotlib.pyplot as plt
 import re
@@ -17,8 +18,8 @@ from graphics_both import GraphicsBoth
 my_test_scenario = Scenario(name='Test Scenario',
                             num_asteroids=10,
                             ship_states=[
-                                {'position': (400, 300), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                {'position': (400, 500), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
+                                {'position': (400, 400), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                {'position': (500, 500), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(1000, 800),
                             time_limit=60,
@@ -77,7 +78,8 @@ if __name__ == "__main__":
     }
     student_vals = {
         "accuracy": [],
-        "score": []
+        "score": [],
+        "wins": 0
     }
 
     for i in range(runs):
@@ -86,12 +88,15 @@ if __name__ == "__main__":
         student_vals["accuracy"].append(score.teams[0].accuracy)
         sdick_vals["score"].append(score.teams[1].asteroids_hit)
         student_vals["score"].append(score.teams[0].asteroids_hit)
+        student_vals["wins"] += int(score.teams[0].asteroids_hit > score.teams[1].asteroids_hit)
 
     connection.close()
 
     plt.figure(1)
-    plt.plot(range(runs), sdick_vals["score"], label='Dr Dick Scores', color='blue', marker='o')
+    plt.plot(range(runs), sdick_vals["score"], label='Dr Dick Score', color='blue', marker='o')
     plt.plot(range(runs), student_vals["score"], label='Student Score', color='red', marker='x')
+    plt.text(x=0,y = 0,s ="student wins: " +str(student_vals["wins"]), fontsize=12)
+
 
     plt.title("Score Comparasion")
     plt.legend()
