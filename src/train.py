@@ -3,9 +3,11 @@ import random
 import numpy as np
 import math
 import time
+import sqlite3
+import os
+from multiprocessing import Process
 from kesslergame import Scenario, KesslerGame, GraphicsType, TrainerEnvironment
 from scott_dick_controller import ScottDickController
-from test_controller_fuzzy import FuzzyController
 from my_controller_v3 import MyController
 from graphics_both import GraphicsBoth
 
@@ -32,6 +34,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
 def fitness(chromosome):
+    
     pre = time.perf_counter()
     x = []
     for index_gene,gene in enumerate(chromosome.gene_list):
@@ -40,8 +43,8 @@ def fitness(chromosome):
     try:
         score, perf_data = game.run(scenario=my_test_scenario, controllers=[MyController(x)])
     except Exception as e:
-        print(e)
-        return 0
+        # print(e)
+        return -300
 
     # print('Scenario eval time: '+str(time.perf_counter()-pre))
     # print(score.stop_reason)
@@ -49,10 +52,13 @@ def fitness(chromosome):
     # print('Deaths: ' + str([team.deaths for team in score.teams]))
     # print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
     # score.teams[0].accuracy
+    print("------------------------------------------------")
     print("asteroids hit: "+str(score.teams[0].asteroids_hit))
-    print("time alive: " + str(score.sim_time))
+    print("time alive:    " + str(score.sim_time))
+    print("accuracy:      "+str(score.teams[0].accuracy))
+    print("fitness:       "+str((score.teams[0].asteroids_hit + score.sim_time)*score.teams[0].accuracy))
 
-    return score.teams[0].asteroids_hit + score.sim_time
+    return (score.teams[0].asteroids_hit + score.sim_time)*score.teams[0].accuracy
 
 def chromosome_function():
     chromosome_data = np.sort([random.uniform(0, 3) for _ in range(6)]).tolist() # bullet_time
@@ -70,16 +76,92 @@ def chromosome_function():
     return chromosome_data
 
 if __name__ == "__main__":
-    alg = ga.GA()
-    alg.population_size = 100
-    alg.generation_goal = 100
-    alg.target_fitness_type = 'max'
-    alg.fitness_function_impl = fitness
-    alg.chromosome_impl = chromosome_function
-    alg.evolve()
+    
+    batch = []
+    batchsize = 20
+    base_dir = os.path.dirname(os.path.abspath(__file__)) 
 
-    alg.graph.highest_value_chromosome()
-    alg.graph.show()
+    for i in range(batchsize):
+        db_path = os.path.join(base_dir,'batches',f'd{i}.db') 
+        alg = ga.GA()
+        alg.database_name = db_path
+        alg.population_size = 25
+        alg.generation_goal = 6
+        alg.target_fitness_type = 'max'
+        alg.fitness_function_impl = fitness
+        alg.chromosome_impl = chromosome_function
+        batch.append(Process(target=alg.evolve, args=(batchsize,)))
+
+    for b in batch:
+        b.start()
+
+    for b in batch:
+        b.join()    
+        
+    # get final db    
+    # 
+
+    batchdir = os.path.join(base_dir, 'batches')
+
+    main_db = os.path.join(batchdir, 'd0.db')
+    connection = sqlite3.connect(main_db)
+    cursor = connection.cursor()
+
+    cursor.execute("PRAGMA journal_mode=OFF;")
+    cursor.execute("PRAGMA synchronous=OFF;")
+    cursor.execute("PRAGMA foreign_keys=OFF;")
+
+    i = 0
+
+    for filename in os.listdir(batchdir):
+
+        if not filename.endswith(".db"):
+            continue
+        if filename == "d0.db":
+            continue
+
+        file_path = os.path.join(batchdir, filename)
+
+        alias = f"db_to_merge_{i}"
+        i += 1
+
+        cursor.execute(f"ATTACH DATABASE '{file_path}' AS {alias}")
+        print("Attached", filename)
+
+        # finalize any previous statement
+        cursor.execute("SELECT 1")
+
+        tables = cursor.execute(
+            f"SELECT name FROM {alias}.sqlite_master WHERE type='table';"
+        ).fetchall()
+
+        # finalize statement
+        cursor.execute("SELECT 1")
+
+        for (table_name,) in tables:
+            cursor.execute(f"""
+                INSERT OR REPLACE INTO main.{table_name}
+                SELECT * FROM {alias}.{table_name}
+            """)
+
+        connection.commit()
+
+        # finalize everything before detach
+        cursor.execute("SELECT 1")
+
+        cursor.execute(f"DETACH DATABASE {alias}")
+        print("Detached", filename)
+
+    connection.commit()
+    connection.close()
+    print("Done")
+
+
+
+
+
+
+
 
 
 

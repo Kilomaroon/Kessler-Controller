@@ -6,6 +6,7 @@ import math
 import os
 import time
 import ast
+import matplotlib.pyplot as plt
 import re
 from kesslergame import Scenario, KesslerGame, GraphicsType, TrainerEnvironment
 from scott_dick_controller import ScottDickController
@@ -16,8 +17,8 @@ from graphics_both import GraphicsBoth
 my_test_scenario = Scenario(name='Test Scenario',
                             num_asteroids=10,
                             ship_states=[
-                                {'position': (400, 400), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
+                                {'position': (400, 300), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                {'position': (400, 500), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(1000, 800),
                             time_limit=60,
@@ -33,10 +34,8 @@ game_settings = {'perf_tracker': True,
 
 
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
-# game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
 def fitness(chromosome):
-    # pre = time.perf_counter()
 
     try:
         pre = time.perf_counter()
@@ -45,30 +44,15 @@ def fitness(chromosome):
         print(e)
         return 0
 
-    # print('Scenario eval time: '+str(time.perf_counter()-pre))
-    # print(score.stop_reason)
-    # print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
-    # print('Deaths: ' + str([team.deaths for team in score.teams]))
-    # print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
-    # score.teams[0].accuracy
-    print("us " + str(score.teams[0].asteroids_hit))
-    print("test "+ str(score.teams[1].asteroids_hit))
-
-    return score.teams[0].asteroids_hit*score.teams[0].accuracy
+    return score
 
 
 if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.abspath(__file__))   
-    db_path = os.path.join(base_dir, "database4.db")        
-
-    # print("Using DB at:", db_path)  # debug
+    db_path = os.path.join(base_dir,"batches", "d0.db")        
 
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
-
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-    print("Tables in DB:", cursor.fetchall())
-
 
     cursor.execute("SELECT chromosome FROM data ORDER BY fitness DESC LIMIT 1;")
     records = cursor.fetchall()
@@ -76,7 +60,47 @@ if __name__ == "__main__":
     input_string_cleaned = re.sub(r'np\.float64\((.*?)\)', r'\1', records[0][0])
     output_list = ast.literal_eval(input_string_cleaned)
 
-    # print(output_list)
-    fitness(output_list)
+    # get user input for runs
+    while True:
+        user_input = input("Runs (int): ")
+        try:
+            runs = int(user_input)
+            print(f"Starting {runs} runs...")
+            break  # Exit the loop if conversion is successful
+        except ValueError:
+            print("Invalid input. Please enter a whole number.")
+
+    # run and store data for plotting
+    sdick_vals = {
+        "accuracy": [],
+        "score": []
+    }
+    student_vals = {
+        "accuracy": [],
+        "score": []
+    }
+
+    for i in range(runs):
+        score = fitness(output_list)
+        sdick_vals["accuracy"].append(score.teams[1].accuracy)
+        student_vals["accuracy"].append(score.teams[0].accuracy)
+        sdick_vals["score"].append(score.teams[1].asteroids_hit)
+        student_vals["score"].append(score.teams[0].asteroids_hit)
 
     connection.close()
+
+    plt.figure(1)
+    plt.plot(range(runs), sdick_vals["score"], label='Dr Dick Scores', color='blue', marker='o')
+    plt.plot(range(runs), student_vals["score"], label='Student Score', color='red', marker='x')
+
+    plt.title("Score Comparasion")
+    plt.legend()
+
+    plt.figure(2)
+    plt.plot(range(runs), sdick_vals["accuracy"], label='Dr Dick Accuracy', color='blue', marker='o')
+    plt.plot(range(runs), student_vals["accuracy"], label='Student Accuracy', color='red', marker='x')
+
+    plt.title("Accuracy Comparasion")
+    plt.legend()
+
+    plt.show()

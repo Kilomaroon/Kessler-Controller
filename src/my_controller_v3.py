@@ -22,7 +22,7 @@ class MyController(KesslerController):
         """
         # inputs 
         bullet_time = ctrl.Antecedent(np.arange(0, 3.0, 0.01), 'bullet_time')
-        theta_delta = ctrl.Antecedent(np.arange(-math.pi, math.pi, 0.05), 'theta_delta')
+        theta_delta = ctrl.Antecedent(np.arange(-math.pi, math.pi, 0.01), 'theta_delta')
         asteroid_size = ctrl.Antecedent(np.arange(1, 5, 1), 'asteroid_size')
         
         # Outputs 
@@ -68,13 +68,13 @@ class MyController(KesslerController):
         self.targeting_control = ctrl.ControlSystem()
         
         # bullet_time = instant
-        self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['sharp_left'], (ship_turn['sharp_left'], ship_fire['yes'])))
+        self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['sharp_left'], (ship_turn['sharp_left'], ship_fire['no'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['left'], (ship_turn['left'], ship_fire['yes'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['slight_left'], (ship_turn['slight_left'], ship_fire['yes'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['perfect'], (ship_turn['fine_tune'], ship_fire['yes'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['slight_right'], (ship_turn['slight_right'], ship_fire['yes'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['right'], (ship_turn['right'], ship_fire['yes'])))
-        self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['sharp_right'], (ship_turn['sharp_right'], ship_fire['yes'])))
+        self.targeting_control.addrule(ctrl.Rule(bullet_time['instant'] & theta_delta['sharp_right'], (ship_turn['sharp_right'], ship_fire['no'])))
         # bullet_time = very_fast
         self.targeting_control.addrule(ctrl.Rule(bullet_time['very_fast'] & theta_delta['sharp_left'], (ship_turn['sharp_left'], ship_fire['no'])))
         self.targeting_control.addrule(ctrl.Rule(bullet_time['very_fast'] & theta_delta['left'], (ship_turn['left'], ship_fire['yes'])))
@@ -221,7 +221,7 @@ class MyController(KesslerController):
     def get_movement_thrust(self, ship_state, game_state):
         """get thrust from movement fuzzy system"""
         try:
-            threats = self.assess_threats(game_state["asteroids"], ship_state)
+            threats = self.assess_threats(game_state["asteroids"], ship_state, game_state['mines'])
             map_size = game_state["map_size"]
             ship_pos = ship_state["position"]
 
@@ -244,7 +244,7 @@ class MyController(KesslerController):
             
             if dist < 120:    # adjust this for what distance is too close to the asteroids
         
-                print(f"[ESCAPE] dist={dist:.1f} -> hard thrust")
+                # print(f"[ESCAPE] dist={dist:.1f} -> hard thrust")
                 return -200.0
 
             
@@ -264,9 +264,6 @@ class MyController(KesslerController):
         except Exception as e:
             # print("Movement error:", e)
             return 0.0
-
-
-
 
     def apply_survival_override(self, ship_state, game_state, thrust, fire, aim_error):
         """apply survival system overrides"""
@@ -334,7 +331,7 @@ class MyController(KesslerController):
             self.last_mine_time = -100  
         return (self.eval_frames - self.last_mine_time) < 60  # about 2s
 
-    def assess_threats(self, asteroids, ship_state):
+    def assess_threats(self, asteroids, ship_state, mines):
         """threat assessment for movement and survival systems"""
         ship_pos = ship_state["position"]
         ship_vel = ship_state["velocity"]
@@ -361,6 +358,24 @@ class MyController(KesslerController):
                 'asteroid': asteroid,
                 'distance': distance,
                 'approach_speed': approach_speed,
+                'threat_score': threat_score
+            })
+
+        for mine in mines:
+            distance = math.dist(ship_pos, mine['position']) 
+            
+            # threat score based on distance
+            threat_score = 1.0 / (distance + 0.01)
+            threat_score = min(1.0, threat_score)
+            
+            # calculate approach speed 
+            to_mine = [mine['position'][0]-ship_pos[0], mine['position'][1]-ship_pos[1]] # vector from ship to asteroid
+            distance_norm = math.sqrt(to_mine[0]**2 + to_mine[1]**2) # magnitude
+            
+            threats.append({
+                'asteroid': mine,
+                'distance': distance,
+                'approach_speed': mine.remaining_time,
                 'threat_score': threat_score
             })
         
@@ -437,6 +452,7 @@ class MyController(KesslerController):
         
         intercept_pos, intercept_time = self.calculate_intercept(ship_pos, best_target)
         return best_target, intercept_pos, intercept_time
+        
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
         asteroids = game_state["asteroids"]
@@ -469,9 +485,7 @@ class MyController(KesslerController):
             fire_output = self.targeting_sim.output['ship_fire']
             fire = bool(fire_output > 0.5)
         except Exception:
-            # proportional control
-            turn_rate = float(theta_delta * 180 / math.pi)
-            fire = bool(abs(theta_delta) < 0.2 and intercept_time < 2.0)
+            fire = 0
 
         # movement
         thrust = self.get_movement_thrust(ship_state, game_state)
