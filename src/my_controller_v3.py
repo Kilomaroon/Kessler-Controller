@@ -396,7 +396,7 @@ class MyController(KesslerController):
         """
         asteroid_pos = asteroid['position']
         asteroid_vel = asteroid['velocity']
-        bullet_speed = 900
+        bullet_speed = 850
         
         # asteroid-ship vector and angle
         asteroid_ship_x = ship_pos[0] - asteroid_pos[0]
